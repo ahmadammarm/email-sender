@@ -1,95 +1,116 @@
 /* eslint-disable prettier/prettier */
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from 'nodemailer';
-import { NewsItem } from '@/types/emaildata';
+import { EmailData } from '@/types/emaildata';
+import path from 'path';
+import fs from 'fs';
 
 export async function POST(request: NextRequest) {
-
     try {
         const body = await request.json();
+        const { emailData } = body as { emailData: EmailData };
 
-        const { emails, newsItems } = body;
-
-        if (!emails || !Array.isArray(emails) || emails.length === 0) {
-            return NextResponse.json({
-                error: 'Minimal 1 email diperlukan',
-            }, {
-                status: 400,
-            })
+        if (!emailData) {
+            return NextResponse.json({ error: 'Data berita diperlukan' }, { status: 400 });
         }
 
-        if (!newsItems || !Array.isArray(newsItems) || newsItems.length === 0) {
-            return NextResponse.json({
-                error: 'Minimal 1 berita diperlukan',
-            }, {
-                status: 400,
-            })
+        if (!emailData.emails || !Array.isArray(emailData.emails) || emailData.emails.length === 0) {
+            return NextResponse.json({ error: 'Minimal satu email diperlukan' }, { status: 400 });
         }
 
-        const transporter = nodemailer.createTransport({
+        if (!emailData.subject || !emailData.message) {
+            return NextResponse.json({ error: 'Subject dan message diperlukan' }, { status: 400 });
+        }
+
+        const transporter = nodemailer.createTransporter({
             service: 'gmail',
             auth: {
                 user: process.env.GMAIL_USER,
-                pass: process.env.GMAIL_APP_PASS,
-            },
-        })
+                pass: process.env.GMAIL_PASSWORD
+            }
+        });
 
-        const results: {
-            title: string;
-            success: boolean;
-            error?: string;
-            recipients: number
-        }[] = [];
+        const attachments: any[] = [];
+        let processedemailData = { ...emailData };
 
-        const allProcessedItem: NewsItem[] = [];
+        try {
+            const logoPath = path.join(process.cwd(), 'public', 'logo.png');
 
-        const allAttachments: any[] = [];
+            if (fs.existsSync(logoPath)) {
+                attachments.push({
+                    filename: 'logo.png',
+                    path: logoPath,
+                    cid: 'logo'
+                });
+            } else {
+                console.warn('Logo file not found, using fallback');
+            }
+        } catch (error) {
+            console.warn('Error adding logo attachment:', error);
+        }
 
-        const emailHTML = EmailBody(allProcessedItem, '');
+        if (emailData.imageUrl) {
+            if (emailData.imageUrl.startsWith('data:image')) {
+                const matches = emailData.imageUrl.match(/^data:image\/([a-zA-Z+]+);base64,/);
+                const imageType = matches ? matches[1] : 'jpeg';
+                const base64Data = emailData.imageUrl.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+                const fileName = `news-image.${imageType}`;
+
+                attachments.push({
+                    filename: fileName,
+                    content: base64Data,
+                    encoding: 'base64',
+                    cid: 'news-image'
+                });
+
+                processedemailData.imageUrl = 'cid:news-image';
+            }
+        }
+
+        const emailHtml = EmailBody([processedemailData], 'cid:logo');
 
         try {
             const info = await transporter.sendMail({
-                from: '"Your Email" <news@example.com>',
-                to: emails.join(','), // Mengirim ke semua email yang ditambahkan
-                subject: `Newsletter Your Email: ${newsItems.length} Berita Terbaru`,
-                html: emailHTML,
-                attachments: allAttachments,
+                from: '"Example Email" <news@example.com>',
+                to: emailData.emails.join(','),
+                subject: `Newsletter: ${emailData.subject}`,
+                html: emailHtml,
+                attachments: attachments
             });
 
-            console.log(`Berhasil kirim email ke ${emails.length} penerima: ${info.messageId}`);
-
-            // Catat hasil untuk semua berita
-            for (const item of newsItems) {
-                results.push({
-                    title: item.title,
-                    success: true,
-                    recipients: emails.length,
-                });
-            }
+            console.log(`Berhasil kirim email ke ${emailData.emails.length} penerima: ${info.messageId}`);
 
             return NextResponse.json({
                 success: true,
-                message: `Berhasil mengirim ${newsItems.length} berita ke ${emails.length} penerima`,
-                results,
+                message: `Berhasil mengirim berita "${emailData.subject}" ke ${emailData.emails.length} penerima`,
+                result: {
+                    title: emailData.subject,
+                    success: true,
+                    recipients: emailData.emails.length,
+                    messageId: info.messageId
+                }
             });
-        } catch (error: any) {
-            console.error('Error processing news items:', error);
+
+        } catch (error) {
+            console.error('Gagal mengirim newsletter:', error);
+
             return NextResponse.json({
-                error: 'Terjadi kesalahan saat memproses berita',
-            }, {
-                status: 500,
-            });
+                error: 'Terjadi kesalahan saat mengirim email',
+                details: (error as Error).message,
+                result: {
+                    title: emailData.subject,
+                    success: false,
+                    recipients: 0,
+                    error: (error as Error).message
+                }
+            }, { status: 500 });
         }
 
-
-    } catch (error: any) {
-        console.error('Error in send-email route:', error);
+    } catch (error) {
+        console.error('Error processing request:', error);
         return NextResponse.json({
-            error: 'Terjadi kesalahan saat mengirim email',
-        }, {
-            status: 500,
-        });
+            error: 'Terjadi kesalahan saat memproses permintaan',
+            details: (error as Error).message
+        }, { status: 500 });
     }
-
-
 }
