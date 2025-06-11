@@ -1,8 +1,8 @@
 export interface FormData {
     email: string;
-    subject: string;
-    title: string;
-    message: string;
-    url: string;
-    imageUrl?: string; 
+    newsSubject: string;
+    newsTitle: string;
+    newsUrl: string;
+    newsPreview: string;
+    newsImage: FileList;
 }
