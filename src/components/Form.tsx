@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
-import { NewsItem } from "@/types/newsitem"
+import { NewsItem } from "@/types/emaildata"
 import { Badge } from "./ui/badge"
 import { Separator } from "./ui/separator"
 
