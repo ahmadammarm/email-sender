@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from 'nodemailer';
-import { NewsItem } from '@/types/newsitem';
+import { NewsItem } from '@/types/emaildata';
 
 export async function POST(request: NextRequest) {
 
